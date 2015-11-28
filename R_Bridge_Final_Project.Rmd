@@ -1,0 +1,102 @@
+# *R Bridge Final Project*
+### Logan Thomson
+
+##Loading Libraries
+
+```{r}
+library(hflights)
+library(ggplot2)
+library(dplyr)
+```
+
+##Transforming the Data
+
+####Change Days of Week to Character Values
+Days of the week were numerical, so instead of having to remember what day of the week corresponded to which number, I changed the DayOfWeek values to the appropriate character values
+```{r}
+hflights$DayOfWeek <- gsub(1, 'Monday', hflights$DayOfWeek)
+hflights$DayOfWeek <- gsub(2, 'Tuesday', hflights$DayOfWeek)
+hflights$DayOfWeek <- gsub(3, 'Wednesday', hflights$DayOfWeek)
+hflights$DayOfWeek <- gsub(4, 'Thursday', hflights$DayOfWeek)
+hflights$DayOfWeek <- gsub(5, 'Friday', hflights$DayOfWeek)
+hflights$DayOfWeek <- gsub(6, 'Saturday', hflights$DayOfWeek)
+hflights$DayOfWeek <- gsub(7, 'Sunday', hflights$DayOfWeek)
+```
+
+####Combine Date Columns
+```{r}
+flight_date <- paste(hflights$Month, hflights$DayofMonth, hflights$Year, sep="/")
+
+hflights$Date <- flight_date
+hflights$Date <- as.Date(flight_date, "%m/%d/%Y")
+```
+
+Now that I have some new data, and some columns that I'm not interested in, I combined the data into a new data frame.
+```{r}
+myflights <- subset(hflights, select=c(Date, DayOfWeek, UniqueCarrier, FlightNum, TailNum, TaxiIn, TaxiOut, AirTime, ArrDelay, 
+                                       DepDelay, ActualElapsedTime, Origin, Dest, Distance))
+```
+
+####Add a Distance/Time Value
+I created a combined field by dividing the total distance of the flight by the "Actual Elapsed Time" field. This gave me a number I could use to convey the range of time it took to fly the same distance.
+```{r}
+dis_per_min <- (myflights$Distance / myflights$ActualElapsedTime)
+myflights$mi_per_min <- dis_per_min
+```
+
+Here is a preview of my new data frame:
+```{r}
+head(myflights)
+```
+
+## Flight Times and Delays by Day of Week
+
+####Plotting Flight Time, Distance, and Day of Week
+I wanted to see if there was any pattern to the distance traveled, the flight time, and the day of the week.
+```{r}
+qplot(Distance, ActualElapsedTime, color=DayOfWeek, data=myflights, main='Total Flight Time by Distance')
+```
+
+What about departure delays by day of the week?  Looks like the days with greater amounts of delays simply have more flights.
+```{r, fig.width=10}
+qplot(DepDelay, data=myflights, geom='histogram', binwidth = 5, xlim =c(-25, 200), main='Departure Delays by Day of Week') + facet_wrap(~DayOfWeek)
+```
+
+I decided to work with a smaller data set, so I looked at the airlines with the most flights, and the destinations with the most flights.
+```{r}
+ggplot(data=myflights) + geom_bar(aes(x=UniqueCarrier), bin=5) + ggtitle('Flights by Airline')
+```
+
+Looks like there are a lot more destinations to work with, so I will reduce the number to the destinations with the most flights.
+```{r, fig.width=12}
+dests <- ggplot(data=myflights) + geom_bar(aes(x=Dest))
+dests + theme(axis.text.x=element_text(angle=-90)) + ggtitle('Flights by Destination')
+```
+
+## Using The Top Destinations Only
+
+I could have used `dplyr` to get this information, but I wanted to get familiar with various ways of selecting data. Here, I use `table` to select the Destination column, and turn that into a data frame. I can then subset that to destinations with 5000 flights or more.
+```{r}
+top_dests <- data.frame(table(myflights$Dest))
+top_dests <- subset(top_dests, Freq > 5000)
+head(top_dests)
+```
+
+Now that I know the top destinations, I will create a dataframe with the flights information, but only for those selected cities:
+```{r}
+most_dest <- filter(myflights, Dest == 'ATL' | Dest == 'AUS' | Dest == 'DAL' | Dest == 'DEN' | Dest == 'DFW' | Dest == 'LAX' | 
+                      Dest == 'MSY' | Dest == 'ORD' | Dest == 'PHX')
+```
+
+####Plotting Data
+
+Destinations with highest frequency of flights, range of distance covered per minute (includes taxi time, flight, delays)
+```{r, echo=FALSE, warning=FALSE, fig.width=10, fig.height=10}
+qplot(mi_per_min, data=most_dest, geom='density', fill=Dest) + facet_grid(Dest ~.)
+```
+
+Destinations with miles per minute, by carrier - who is the best performer per destination?
+
+```{r, warning=FALSE, fig.width=10, fig.height=10}
+qplot(mi_per_min, data=most_dest, geom='density', color=UniqueCarrier) + facet_grid(Dest ~.)
+```
